@@ -2,19 +2,20 @@
 
 #define PREF_DOMAIN @"com.mediasubscriptions"
 #define PREF_URLS_KEY @"URLs"
+#define PREF_TIME_KEY @"ScheduledTime"
 #define LAUNCHAGENT_LABEL @"com.mediasubscriptions.downloader"
 
 @implementation MediaSubscriptionsPane
 
 - (NSView *)loadMainView {
-    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 668, 280)];
+    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 668, 320)];
     [self setMainView:mainView];
     
     subscriptions = [[NSMutableArray alloc] init];
     titleCache = [[NSMutableDictionary alloc] init];
     [self loadPreferences];
     
-    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 40, 628, 220)];
+    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 80, 628, 220)];
     [scrollView setBorderType:NSBezelBorder];
     [scrollView setHasVerticalScroller:YES];
     [scrollView setAutohidesScrollers:YES];
@@ -39,7 +40,7 @@
     [mainView addSubview:scrollView];
     
     // Button container view at bottom left of scroll view
-    NSView *buttonContainer = [[NSView alloc] initWithFrame:NSMakeRect(20, 15, 50, 23)];
+    NSView *buttonContainer = [[NSView alloc] initWithFrame:NSMakeRect(20, 55, 50, 23)];
     [mainView addSubview:buttonContainer];
     
     // Add button with gradient style
@@ -66,7 +67,7 @@
     [buttonContainer addSubview:removeButton];
     
     // Add instructional text below the buttons
-    NSTextField *instructionLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(321, 22, 550, 17)];
+    NSTextField *instructionLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(321, 62, 550, 17)];
     [instructionLabel setStringValue:@"Add the URL of a Youtube channel or playlist, or an RSS feed."];
     [instructionLabel setBezeled:NO];
     [instructionLabel setDrawsBackground:NO];
@@ -76,6 +77,31 @@
     [instructionLabel setTextColor:[NSColor grayColor]];
     [mainView addSubview:instructionLabel];
     
+    // Add schedule time label
+    NSTextField *scheduleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 22, 230, 17)];
+    [scheduleLabel setStringValue:@"Download new media every day at:"];
+    [scheduleLabel setBezeled:NO];
+    [scheduleLabel setDrawsBackground:NO];
+    [scheduleLabel setEditable:NO];
+    [scheduleLabel setSelectable:NO];
+    [scheduleLabel setFont:[NSFont systemFontOfSize:13]];
+    [mainView addSubview:scheduleLabel];
+    
+    // Add time picker with stepper
+    timePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(248, 18, 110, 27)];
+    [timePicker setDatePickerStyle:NSTextFieldAndStepperDatePickerStyle];
+    [timePicker setDatePickerElements:NSHourMinuteSecondDatePickerElementFlag];
+    [timePicker setBezeled:YES];
+    [timePicker setDrawsBackground:YES];
+    [timePicker setTarget:self];
+    [timePicker setAction:@selector(timeChanged:)];
+    [timePicker setDelegate:self];
+    
+    // Load saved time or default to 3:00 AM
+    [self loadTimePreference];
+    
+    [mainView addSubview:timePicker];
+    
     [urlTableView reloadData];
     
     return mainView;
@@ -83,6 +109,7 @@
 
 - (void)willSelect {
     [self loadPreferences];
+    [self loadTimePreference];
     [urlTableView reloadData];
 }
 
@@ -217,12 +244,19 @@
     NSString *resourcesPath = [bundlePath stringByAppendingPathComponent:@"Contents/Resources"];
     NSString *downloaderPath = [resourcesPath stringByAppendingPathComponent:@"downloader.sh"];
     
+    // Get hour and minute from time picker
+    NSDate *selectedTime = [timePicker dateValue];
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDateComponents *components = [calendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:selectedTime];
+    NSInteger hour = [components hour];
+    NSInteger minute = [components minute];
+    
     NSDictionary *launchAgentDict = @{
         @"Label": LAUNCHAGENT_LABEL,
         @"ProgramArguments": @[@"/bin/sh", downloaderPath, resourcesPath],
         @"StartCalendarInterval": @{
-            @"Hour": @3,
-            @"Minute": @0
+            @"Hour": @(hour),
+            @"Minute": @(minute)
         },
         @"StandardOutPath": [[self logsPath] stringByAppendingPathComponent:@"downloader.log"],
         @"StandardErrorPath": [[self logsPath] stringByAppendingPathComponent:@"downloader.error.log"]
@@ -549,6 +583,42 @@
     }];
     
     [task resume];
+}
+
+- (void)timeChanged:(id)sender {
+    [self saveTimePreference];
+    [self updateInfrastructure];
+}
+
+- (void)saveTimePreference {
+    NSDate *selectedTime = [timePicker dateValue];
+    CFPreferencesSetValue((CFStringRef)PREF_TIME_KEY,
+                          (__bridge CFPropertyListRef)selectedTime,
+                          (CFStringRef)PREF_DOMAIN,
+                          kCFPreferencesCurrentUser,
+                          kCFPreferencesAnyHost);
+    CFPreferencesSynchronize((CFStringRef)PREF_DOMAIN, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+}
+
+- (void)loadTimePreference {
+    CFPropertyListRef savedTime = CFPreferencesCopyValue((CFStringRef)PREF_TIME_KEY,
+                                                          (CFStringRef)PREF_DOMAIN,
+                                                          kCFPreferencesCurrentUser,
+                                                          kCFPreferencesAnyHost);
+    if (savedTime) {
+        NSDate *time = (__bridge NSDate *)savedTime;
+        [timePicker setDateValue:time];
+        CFRelease(savedTime);
+    } else {
+        // Default to 3:00 AM
+        NSDateComponents *components = [[NSDateComponents alloc] init];
+        [components setHour:3];
+        [components setMinute:0];
+        [components setSecond:0];
+        NSCalendar *calendar = [NSCalendar currentCalendar];
+        NSDate *defaultTime = [calendar dateFromComponents:components];
+        [timePicker setDateValue:defaultTime];
+    }
 }
 
 @end

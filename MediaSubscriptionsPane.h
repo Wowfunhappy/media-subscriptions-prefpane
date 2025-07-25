@@ -1,11 +1,12 @@
 #import <PreferencePanes/PreferencePanes.h>
 
-@interface MediaSubscriptionsPane : NSPreferencePane <NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate> {
+@interface MediaSubscriptionsPane : NSPreferencePane <NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate, NSDatePickerCellDelegate> {
     NSTableView *urlTableView;
     NSMutableArray *subscriptions;
     NSButton *addButton;
     NSButton *removeButton;
     NSMutableDictionary *titleCache;
+    NSDatePicker *timePicker;
 }
 
 - (void)addURL:(id)sender;
