@@ -23,12 +23,12 @@
     
     NSTableColumn *titleColumn = [[NSTableColumn alloc] initWithIdentifier:@"Title"];
     [[titleColumn headerCell] setStringValue:@"Title"];
-    [titleColumn setWidth:300];
+    [titleColumn setWidth:200];
     [urlTableView addTableColumn:titleColumn];
     
     NSTableColumn *urlColumn = [[NSTableColumn alloc] initWithIdentifier:@"URL"];
     [[urlColumn headerCell] setStringValue:@"URL"];
-    [urlColumn setWidth:324];
+    [urlColumn setWidth:424];
     [urlTableView addTableColumn:urlColumn];
     
     [urlTableView setUsesAlternatingRowBackgroundColors:YES];
