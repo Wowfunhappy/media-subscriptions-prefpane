@@ -130,9 +130,20 @@
                 [subscriptions addObject:subscription];
                 
                 [self fetchTitleForURL:item completion:^(NSString *title) {
-                    [subscription setObject:title forKey:@"title"];
-                    [self savePreferences];
-                    [urlTableView reloadData];
+                    if ([title isEqualToString:@"__HTTP_ERROR__"]) {
+                        // Remove this subscription as it returns 404
+                        NSInteger rowIndex = [subscriptions indexOfObject:subscription];
+                        if (rowIndex != NSNotFound) {
+                            [subscriptions removeObjectAtIndex:rowIndex];
+                            [self savePreferences];
+                            [urlTableView reloadData];
+                            [self updateInfrastructure];
+                        }
+                    } else {
+                        [subscription setObject:title forKey:@"title"];
+                        [self savePreferences];
+                        [urlTableView reloadData];
+                    }
                 }];
             } else if ([item isKindOfClass:[NSDictionary class]]) {
                 NSMutableDictionary *subscription = [NSMutableDictionary dictionaryWithDictionary:item];
@@ -141,7 +152,27 @@
                 NSString *url = [subscription objectForKey:@"url"];
                 NSString *title = [subscription objectForKey:@"title"];
                 if (url && title) {
-                    [titleCache setObject:title forKey:url];
+                    // Don't cache placeholder titles, re-fetch them
+                    if ([title isEqualToString:@"..."]) {
+                        [self fetchTitleForURL:url completion:^(NSString *fetchedTitle) {
+                            if ([fetchedTitle isEqualToString:@"__HTTP_ERROR__"]) {
+                                // Remove this subscription as it returns an error
+                                NSInteger rowIndex = [subscriptions indexOfObject:subscription];
+                                if (rowIndex != NSNotFound) {
+                                    [subscriptions removeObjectAtIndex:rowIndex];
+                                    [self savePreferences];
+                                    [urlTableView reloadData];
+                                    [self updateInfrastructure];
+                                }
+                            } else {
+                                [subscription setObject:fetchedTitle forKey:@"title"];
+                                [self savePreferences];
+                                [urlTableView reloadData];
+                            }
+                        }];
+                    } else {
+                        [titleCache setObject:title forKey:url];
+                    }
                 }
             }
         }
@@ -267,13 +298,24 @@
         NSString *oldURL = [subscription objectForKey:@"url"];
         NSString *newURL = (NSString *)object;
         
-        // If the URL is empty, remove the row
-        if ([newURL length] == 0) {
-            [subscriptions removeObjectAtIndex:row];
-            [self savePreferences];
-            [urlTableView reloadData];
-            [self updateInfrastructure];
-            return;
+        // Check if URL is valid and not a duplicate
+        BOOL isValid = [self isValidURL:newURL];
+        BOOL isDuplicate = [self isDuplicateURL:newURL excludingIndex:row];
+        
+        if (!isValid || isDuplicate) {
+            // If the old URL was valid, restore it
+            if ([self isValidURL:oldURL] && ![self isDuplicateURL:oldURL excludingIndex:row]) {
+                // Keep the old URL, just refresh the table
+                [urlTableView reloadData];
+                return;
+            } else {
+                // Otherwise, remove the row (same as empty URL)
+                [subscriptions removeObjectAtIndex:row];
+                [self savePreferences];
+                [urlTableView reloadData];
+                [self updateInfrastructure];
+                return;
+            }
         }
         
         [subscription setObject:newURL forKey:@"url"];
@@ -284,9 +326,20 @@
             [urlTableView reloadData];
             
             [self fetchTitleForURL:newURL completion:^(NSString *title) {
-                [subscription setObject:title forKey:@"title"];
-                [self savePreferences];
-                [urlTableView reloadData];
+                if ([title isEqualToString:@"__HTTP_ERROR__"]) {
+                    // Find the row index for this subscription
+                    NSInteger rowIndex = [subscriptions indexOfObject:subscription];
+                    if (rowIndex != NSNotFound) {
+                        [subscriptions removeObjectAtIndex:rowIndex];
+                        [self savePreferences];
+                        [urlTableView reloadData];
+                        [self updateInfrastructure];
+                    }
+                } else {
+                    [subscription setObject:title forKey:@"title"];
+                    [self savePreferences];
+                    [urlTableView reloadData];
+                }
             }];
         }
     }
@@ -307,25 +360,38 @@
         NSInteger editedRow = [urlTableView editedRow];
         NSInteger editedColumn = [urlTableView editedColumn];
         
-        // Check if we were editing the URL column and the text is empty
+        // Check if we were editing the URL column
         if (editedRow >= 0 && editedRow < [subscriptions count] && editedColumn >= 0) {
             NSTableColumn *column = [[urlTableView tableColumns] objectAtIndex:editedColumn];
-            if ([[column identifier] isEqualToString:@"URL"] && [text length] == 0) {
-                // Use performSelector to delay the removal until after the current event loop
-                [self performSelector:@selector(removeEmptyRowAtIndex:) 
-                           withObject:[NSNumber numberWithInteger:editedRow] 
-                           afterDelay:0.0];
+            if ([[column identifier] isEqualToString:@"URL"]) {
+                // Check if URL is empty, invalid, or duplicate
+                BOOL isEmpty = [text length] == 0;
+                BOOL isInvalid = ![self isValidURL:text];
+                BOOL isDuplicate = [self isDuplicateURL:text excludingIndex:editedRow];
+                
+                if (isEmpty || isInvalid || isDuplicate) {
+                    // Use performSelector to delay the removal until after the current event loop
+                    [self performSelector:@selector(removeInvalidRowAtIndex:) 
+                               withObject:[NSNumber numberWithInteger:editedRow] 
+                               afterDelay:0.0];
+                }
             }
         }
     }
 }
 
-- (void)removeEmptyRowAtIndex:(NSNumber *)indexNumber {
+- (void)removeInvalidRowAtIndex:(NSNumber *)indexNumber {
     NSInteger row = [indexNumber integerValue];
     if (row >= 0 && row < [subscriptions count]) {
         NSDictionary *subscription = [subscriptions objectAtIndex:row];
         NSString *url = [subscription objectForKey:@"url"];
-        if ([url length] == 0) {
+        
+        // Remove if URL is empty, invalid, or duplicate
+        BOOL isEmpty = [url length] == 0;
+        BOOL isInvalid = ![self isValidURL:url];
+        BOOL isDuplicate = [self isDuplicateURL:url excludingIndex:row];
+        
+        if (isEmpty || isInvalid || isDuplicate) {
             [subscriptions removeObjectAtIndex:row];
             [self savePreferences];
             [urlTableView reloadData];
@@ -334,24 +400,76 @@
     }
 }
 
+- (BOOL)isValidURL:(NSString *)urlString {
+    if ([urlString length] == 0) {
+        return NO;
+    }
+    
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url || !url.scheme || !url.host) {
+        return NO;
+    }
+    
+    // Check for supported schemes
+    NSString *scheme = [url.scheme lowercaseString];
+    if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) {
+        return NO;
+    }
+    
+    return YES;
+}
+
+- (BOOL)isDuplicateURL:(NSString *)urlString excludingIndex:(NSInteger)excludeIndex {
+    for (NSInteger i = 0; i < [subscriptions count]; i++) {
+        if (i == excludeIndex) {
+            continue;
+        }
+        NSDictionary *subscription = [subscriptions objectAtIndex:i];
+        NSString *existingURL = [subscription objectForKey:@"url"];
+        if ([urlString isEqualToString:existingURL]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 - (void)fetchTitleForURL:(NSString *)urlString completion:(void (^)(NSString *title))completion {
     NSString *cachedTitle = [titleCache objectForKey:urlString];
-    if (cachedTitle) {
+    // Don't use cached title if it's the placeholder
+    if (cachedTitle && ![cachedTitle isEqualToString:@"..."]) {
         completion(cachedTitle);
         return;
     }
     
     NSURL *url = [NSURL URLWithString:urlString];
     if (!url) {
-        completion(@"Invalid URL");
+        completion(@"__HTTP_ERROR__");
         return;
     }
     
-    NSURLSession *session = [NSURLSession sharedSession];
+    // Create a custom configuration with shorter timeout
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    config.timeoutIntervalForRequest = 10.0; // 10 second timeout
+    config.timeoutIntervalForResource = 10.0;
+    
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
     NSURLSessionDataTask *task = [session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        // Check for HTTP response
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+        if ([httpResponse isKindOfClass:[NSHTTPURLResponse class]]) {
+            if (httpResponse.statusCode >= 400) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    // Use a special marker for HTTP errors
+                    completion(@"__HTTP_ERROR__");
+                });
+                return;
+            }
+        }
+        
         if (error || !data) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                completion(@"Failed to fetch title");
+                // Use the same error marker for network/data errors
+                completion(@"__HTTP_ERROR__");
             });
             return;
         }
