@@ -88,9 +88,9 @@
     [mainView addSubview:scheduleLabel];
     
     // Add time picker with stepper
-    timePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(248, 18, 110, 27)];
+    timePicker = [[NSDatePicker alloc] initWithFrame:NSMakeRect(248, 18, 86, 27)];
     [timePicker setDatePickerStyle:NSTextFieldAndStepperDatePickerStyle];
-    [timePicker setDatePickerElements:NSHourMinuteSecondDatePickerElementFlag];
+    [timePicker setDatePickerElements:NSHourMinuteDatePickerElementFlag];
     [timePicker setBezeled:YES];
     [timePicker setDrawsBackground:YES];
     [timePicker setTarget:self];
@@ -263,8 +263,20 @@
     };
     
     NSString *launchAgentPath = [self launchAgentPath];
+    
+    // First unload the existing agent if it exists
+    if ([fm fileExistsAtPath:launchAgentPath]) {
+        NSTask *unloadTask = [[NSTask alloc] init];
+        [unloadTask setLaunchPath:@"/bin/launchctl"];
+        [unloadTask setArguments:@[@"unload", @"-w", launchAgentPath]];
+        [unloadTask launch];
+        [unloadTask waitUntilExit];
+    }
+    
+    // Write the new plist
     [launchAgentDict writeToFile:launchAgentPath atomically:YES];
     
+    // Load the agent with new settings
     NSTask *loadTask = [[NSTask alloc] init];
     [loadTask setLaunchPath:@"/bin/launchctl"];
     [loadTask setArguments:@[@"load", @"-w", launchAgentPath]];
