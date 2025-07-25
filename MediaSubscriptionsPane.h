@@ -1,10 +1,11 @@
 #import <PreferencePanes/PreferencePanes.h>
 
-@interface MediaSubscriptionsPane : NSPreferencePane <NSTableViewDataSource, NSTableViewDelegate> {
+@interface MediaSubscriptionsPane : NSPreferencePane <NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate> {
     NSTableView *urlTableView;
-    NSMutableArray *urls;
+    NSMutableArray *subscriptions;
     NSButton *addButton;
     NSButton *removeButton;
+    NSMutableDictionary *titleCache;
 }
 
 - (void)addURL:(id)sender;
@@ -18,5 +19,6 @@
 - (NSString *)applicationSupportPath;
 - (NSString *)logsPath;
 - (NSString *)cachesPath;
+- (void)fetchTitleForURL:(NSString *)urlString completion:(void (^)(NSString *title))completion;
 
 @end

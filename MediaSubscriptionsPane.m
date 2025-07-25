@@ -10,7 +10,8 @@
     NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 668, 280)];
     [self setMainView:mainView];
     
-    urls = [[NSMutableArray alloc] init];
+    subscriptions = [[NSMutableArray alloc] init];
+    titleCache = [[NSMutableDictionary alloc] init];
     [self loadPreferences];
     
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 40, 628, 220)];
@@ -19,10 +20,17 @@
     [scrollView setAutohidesScrollers:YES];
     
     urlTableView = [[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 626, 218)];
-    NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier:@"URL"];
-    [[column headerCell] setStringValue:@"Subscription URLs"];
-    [column setWidth:624];
-    [urlTableView addTableColumn:column];
+    
+    NSTableColumn *titleColumn = [[NSTableColumn alloc] initWithIdentifier:@"Title"];
+    [[titleColumn headerCell] setStringValue:@"Title"];
+    [titleColumn setWidth:300];
+    [urlTableView addTableColumn:titleColumn];
+    
+    NSTableColumn *urlColumn = [[NSTableColumn alloc] initWithIdentifier:@"URL"];
+    [[urlColumn headerCell] setStringValue:@"URL"];
+    [urlColumn setWidth:324];
+    [urlTableView addTableColumn:urlColumn];
+    
     [urlTableView setUsesAlternatingRowBackgroundColors:YES];
     [urlTableView setDelegate:self];
     [urlTableView setDataSource:self];
@@ -68,33 +76,27 @@
 }
 
 - (void)addURL:(id)sender {
-    NSTextField *alertTextField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)];
-    [alertTextField setStringValue:@""];
+    NSMutableDictionary *subscription = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+                                         @"", @"url",
+                                         @"", @"title",
+                                         nil];
+    [subscriptions addObject:subscription];
+    [self savePreferences];
+    [urlTableView reloadData];
+    [self updateInfrastructure];
     
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"Add Subscription URL"];
-    [alert setInformativeText:@"Enter the URL of a Youtube channel, a Youtube playlist, or an RSS feed:"];
-    [alert addButtonWithTitle:@"Add"];
-    [alert addButtonWithTitle:@"Cancel"];
-    [alert setAccessoryView:alertTextField];
+    NSInteger newRow = [subscriptions count] - 1;
+    [urlTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow] byExtendingSelection:NO];
+    [urlTableView scrollRowToVisible:newRow];
     
-    NSInteger result = [alert runModal];
-    
-    if (result == NSAlertFirstButtonReturn) {
-        NSString *urlString = [alertTextField stringValue];
-        if ([urlString length] > 0) {
-            [urls addObject:urlString];
-            [self savePreferences];
-            [urlTableView reloadData];
-            [self updateInfrastructure];
-        }
-    }
+    NSInteger urlColumnIndex = [urlTableView columnWithIdentifier:@"URL"];
+    [urlTableView editColumn:urlColumnIndex row:newRow withEvent:nil select:YES];
 }
 
 - (void)removeURL:(id)sender {
     NSInteger selectedRow = [urlTableView selectedRow];
     if (selectedRow >= 0) {
-        [urls removeObjectAtIndex:selectedRow];
+        [subscriptions removeObjectAtIndex:selectedRow];
         [self savePreferences];
         [urlTableView reloadData];
         [self updateInfrastructure];
@@ -103,7 +105,7 @@
 
 - (void)savePreferences {
     CFPreferencesSetValue((CFStringRef)PREF_URLS_KEY,
-                          (__bridge CFPropertyListRef)urls,
+                          (__bridge CFPropertyListRef)subscriptions,
                           (CFStringRef)PREF_DOMAIN,
                           kCFPreferencesCurrentUser,
                           kCFPreferencesAnyHost);
@@ -111,18 +113,45 @@
 }
 
 - (void)loadPreferences {
-    CFArrayRef savedURLs = (CFArrayRef)CFPreferencesCopyValue((CFStringRef)PREF_URLS_KEY,
+    CFArrayRef savedData = (CFArrayRef)CFPreferencesCopyValue((CFStringRef)PREF_URLS_KEY,
                                                                (CFStringRef)PREF_DOMAIN,
                                                                kCFPreferencesCurrentUser,
                                                                kCFPreferencesAnyHost);
-    if (savedURLs) {
-        [urls setArray:(__bridge NSArray *)savedURLs];
-        CFRelease(savedURLs);
+    if (savedData) {
+        NSArray *data = (__bridge NSArray *)savedData;
+        [subscriptions removeAllObjects];
+        
+        for (id item in data) {
+            if ([item isKindOfClass:[NSString class]]) {
+                NSMutableDictionary *subscription = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+                                                     item, @"url",
+                                                     @"...", @"title",
+                                                     nil];
+                [subscriptions addObject:subscription];
+                
+                [self fetchTitleForURL:item completion:^(NSString *title) {
+                    [subscription setObject:title forKey:@"title"];
+                    [self savePreferences];
+                    [urlTableView reloadData];
+                }];
+            } else if ([item isKindOfClass:[NSDictionary class]]) {
+                NSMutableDictionary *subscription = [NSMutableDictionary dictionaryWithDictionary:item];
+                [subscriptions addObject:subscription];
+                
+                NSString *url = [subscription objectForKey:@"url"];
+                NSString *title = [subscription objectForKey:@"title"];
+                if (url && title) {
+                    [titleCache setObject:title forKey:url];
+                }
+            }
+        }
+        
+        CFRelease(savedData);
     }
 }
 
 - (void)updateInfrastructure {
-    if ([urls count] == 0) {
+    if ([subscriptions count] == 0) {
         [self teardownInfrastructure];
     } else {
         [self setupInfrastructure];
@@ -167,19 +196,23 @@
 - (void)teardownInfrastructure {
     NSFileManager *fm = [NSFileManager defaultManager];
     
-    NSTask *unloadTask = [[NSTask alloc] init];
-    [unloadTask setLaunchPath:@"/bin/launchctl"];
-    [unloadTask setArguments:@[@"unload", @"-w", [self launchAgentPath]]];
-    [unloadTask launch];
-    [unloadTask waitUntilExit];
+    NSString *launchAgentPath = [self launchAgentPath];
+    if ([fm fileExistsAtPath:launchAgentPath]) {
+        NSTask *unloadTask = [[NSTask alloc] init];
+        [unloadTask setLaunchPath:@"/bin/launchctl"];
+        [unloadTask setArguments:@[@"unload", @"-w", launchAgentPath]];
+        [unloadTask launch];
+        [unloadTask waitUntilExit];
+    }
     
-    [fm removeItemAtPath:[self launchAgentPath] error:nil];
+    [fm removeItemAtPath:launchAgentPath error:nil];
     [fm removeItemAtPath:[self applicationSupportPath] error:nil];
     [fm removeItemAtPath:[self logsPath] error:nil];
     [fm removeItemAtPath:[self cachesPath] error:nil];
     
-    // Clear the URLs preference
-    CFPreferencesSetValue((CFStringRef)PREF_URLS_KEY, NULL, (CFStringRef)PREF_DOMAIN, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    // Clear the URLs preference - set to empty array instead of NULL to avoid crash
+    NSArray *emptyArray = @[];
+    CFPreferencesSetValue((CFStringRef)PREF_URLS_KEY, (__bridge CFArrayRef)emptyArray, (CFStringRef)PREF_DOMAIN, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     CFPreferencesSynchronize((CFStringRef)PREF_DOMAIN, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 }
 
@@ -202,22 +235,162 @@
 #pragma mark - NSTableViewDataSource
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
-    return [urls count];
+    return [subscriptions count];
 }
 
 - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
-    return [urls objectAtIndex:row];
+    if (row >= [subscriptions count]) {
+        return @"";
+    }
+    
+    NSDictionary *subscription = [subscriptions objectAtIndex:row];
+    NSString *identifier = [tableColumn identifier];
+    
+    if ([identifier isEqualToString:@"Title"]) {
+        return [subscription objectForKey:@"title"];
+    } else if ([identifier isEqualToString:@"URL"]) {
+        return [subscription objectForKey:@"url"];
+    }
+    
+    return nil;
 }
 
 - (void)tableView:(NSTableView *)tableView setObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
-    [urls replaceObjectAtIndex:row withObject:object];
-    [self savePreferences];
+    if (row >= [subscriptions count]) {
+        return;
+    }
+    
+    NSMutableDictionary *subscription = [subscriptions objectAtIndex:row];
+    NSString *identifier = [tableColumn identifier];
+    
+    if ([identifier isEqualToString:@"URL"]) {
+        NSString *oldURL = [subscription objectForKey:@"url"];
+        NSString *newURL = (NSString *)object;
+        
+        // If the URL is empty, remove the row
+        if ([newURL length] == 0) {
+            [subscriptions removeObjectAtIndex:row];
+            [self savePreferences];
+            [urlTableView reloadData];
+            [self updateInfrastructure];
+            return;
+        }
+        
+        [subscription setObject:newURL forKey:@"url"];
+        
+        if (![newURL isEqualToString:oldURL]) {
+            [subscription setObject:@"..." forKey:@"title"];
+            [self savePreferences];
+            [urlTableView reloadData];
+            
+            [self fetchTitleForURL:newURL completion:^(NSString *title) {
+                [subscription setObject:title forKey:@"title"];
+                [self savePreferences];
+                [urlTableView reloadData];
+            }];
+        }
+    }
 }
 
 #pragma mark - NSTableViewDelegate
 
 - (void)tableViewSelectionDidChange:(NSNotification *)notification {
     [removeButton setEnabled:([urlTableView selectedRow] >= 0)];
+}
+
+- (void)controlTextDidEndEditing:(NSNotification *)notification {
+    if ([notification object] == urlTableView) {
+        // Get the text from the notification's userInfo
+        NSTextView *textView = [[notification userInfo] objectForKey:@"NSFieldEditor"];
+        NSString *text = [textView string];
+        
+        NSInteger editedRow = [urlTableView editedRow];
+        NSInteger editedColumn = [urlTableView editedColumn];
+        
+        // Check if we were editing the URL column and the text is empty
+        if (editedRow >= 0 && editedRow < [subscriptions count] && editedColumn >= 0) {
+            NSTableColumn *column = [[urlTableView tableColumns] objectAtIndex:editedColumn];
+            if ([[column identifier] isEqualToString:@"URL"] && [text length] == 0) {
+                // Use performSelector to delay the removal until after the current event loop
+                [self performSelector:@selector(removeEmptyRowAtIndex:) 
+                           withObject:[NSNumber numberWithInteger:editedRow] 
+                           afterDelay:0.0];
+            }
+        }
+    }
+}
+
+- (void)removeEmptyRowAtIndex:(NSNumber *)indexNumber {
+    NSInteger row = [indexNumber integerValue];
+    if (row >= 0 && row < [subscriptions count]) {
+        NSDictionary *subscription = [subscriptions objectAtIndex:row];
+        NSString *url = [subscription objectForKey:@"url"];
+        if ([url length] == 0) {
+            [subscriptions removeObjectAtIndex:row];
+            [self savePreferences];
+            [urlTableView reloadData];
+            [self updateInfrastructure];
+        }
+    }
+}
+
+- (void)fetchTitleForURL:(NSString *)urlString completion:(void (^)(NSString *title))completion {
+    NSString *cachedTitle = [titleCache objectForKey:urlString];
+    if (cachedTitle) {
+        completion(cachedTitle);
+        return;
+    }
+    
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url) {
+        completion(@"Invalid URL");
+        return;
+    }
+    
+    NSURLSession *session = [NSURLSession sharedSession];
+    NSURLSessionDataTask *task = [session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || !data) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(@"Failed to fetch title");
+            });
+            return;
+        }
+        
+        NSString *html = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        if (!html) {
+            html = [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];
+        }
+        
+        NSString *title = @"No title found";
+        
+        NSRange titleStart = [html rangeOfString:@"<title>" options:NSCaseInsensitiveSearch];
+        if (titleStart.location != NSNotFound) {
+            NSRange searchRange = NSMakeRange(titleStart.location + titleStart.length, [html length] - titleStart.location - titleStart.length);
+            NSRange titleEnd = [html rangeOfString:@"</title>" options:NSCaseInsensitiveSearch range:searchRange];
+            if (titleEnd.location != NSNotFound) {
+                NSRange titleRange = NSMakeRange(titleStart.location + titleStart.length, titleEnd.location - titleStart.location - titleStart.length);
+                title = [html substringWithRange:titleRange];
+                title = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                
+                title = [title stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
+                title = [title stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
+                title = [title stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
+                title = [title stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
+                title = [title stringByReplacingOccurrencesOfString:@"&#39;" withString:@"'"];
+                
+                if ([title hasSuffix:@" - YouTube"]) {
+                    title = [title substringToIndex:[title length] - 10];
+                }
+            }
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self->titleCache setObject:title forKey:urlString];
+            completion(title);
+        });
+    }];
+    
+    [task resume];
 }
 
 @end
