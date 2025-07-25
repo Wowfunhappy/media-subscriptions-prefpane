@@ -220,7 +220,10 @@
     NSDictionary *launchAgentDict = @{
         @"Label": LAUNCHAGENT_LABEL,
         @"ProgramArguments": @[@"/bin/sh", downloaderPath, resourcesPath],
-        @"StartInterval": @3600,
+        @"StartCalendarInterval": @{
+            @"Hour": @3,
+            @"Minute": @0
+        },
         @"StandardOutPath": [[self logsPath] stringByAppendingPathComponent:@"downloader.log"],
         @"StandardErrorPath": [[self logsPath] stringByAppendingPathComponent:@"downloader.error.log"]
     };
