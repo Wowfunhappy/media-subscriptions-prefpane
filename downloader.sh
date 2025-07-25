@@ -12,7 +12,7 @@ MUSIC_DIR="$HOME/Music"
 
 "$YT_DLP" -U
 
-URLS=$(defaults read com.mediasubscriptions URLs 2>/dev/null | grep "url =" | sed 's/.*url = "\(.*\)";/\1/')
+URLS=$(defaults read Wowfunhappy.mediasubscriptions URLs 2>/dev/null | grep "url =" | sed 's/.*url = "\(.*\)";/\1/')
 
 if [ -z "$URLS" ]; then
     echo "No URLs configured"

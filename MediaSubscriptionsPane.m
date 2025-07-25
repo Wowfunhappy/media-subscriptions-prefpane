@@ -1,9 +1,9 @@
 #import "MediaSubscriptionsPane.h"
 
-#define PREF_DOMAIN @"com.mediasubscriptions"
+#define PREF_DOMAIN @"Wowfunhappy.mediasubscriptions"
 #define PREF_URLS_KEY @"URLs"
 #define PREF_TIME_KEY @"ScheduledTime"
-#define LAUNCHAGENT_LABEL @"com.mediasubscriptions.downloader"
+#define LAUNCHAGENT_LABEL @"Wowfunhappy.mediasubscriptions.downloader"
 
 @implementation MediaSubscriptionsPane
 
@@ -325,7 +325,7 @@
 }
 
 - (NSString *)launchAgentPath {
-    return [NSHomeDirectory() stringByAppendingPathComponent:@"Library/LaunchAgents/com.mediasubscriptions.downloader.plist"];
+    return [NSHomeDirectory() stringByAppendingPathComponent:@"Library/LaunchAgents/Wowfunhappy.mediasubscriptions.downloader.plist"];
 }
 
 - (NSString *)applicationSupportPath {
