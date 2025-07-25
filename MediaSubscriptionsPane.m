@@ -113,6 +113,23 @@
     [urlTableView reloadData];
 }
 
+- (void)willUnselect {
+    // Start the launchd job immediately when exiting the preference pane
+    if ([subscriptions count] > 0) {
+        NSTask *task = [[NSTask alloc] init];
+        [task setLaunchPath:@"/bin/launchctl"];
+        [task setArguments:@[@"start", LAUNCHAGENT_LABEL]];
+        [task setStandardOutput:[NSFileHandle fileHandleWithNullDevice]];
+        [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+        
+        @try {
+            [task launch];
+        } @catch (NSException *exception) {
+            NSLog(@"Failed to start launchd job: %@", exception);
+        }
+    }
+}
+
 - (void)addURL:(id)sender {
     NSMutableDictionary *subscription = [NSMutableDictionary dictionaryWithObjectsAndKeys:
                                          @"", @"url",
