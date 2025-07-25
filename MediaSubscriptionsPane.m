@@ -352,6 +352,17 @@
     [removeButton setEnabled:([urlTableView selectedRow] >= 0)];
 }
 
+- (BOOL)tableView:(NSTableView *)tableView shouldEditTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    if ([[tableColumn identifier] isEqualToString:@"Title"]) {
+        // If user tries to edit title, redirect to URL column
+        NSInteger urlColumnIndex = [tableView columnWithIdentifier:@"URL"];
+        [tableView editColumn:urlColumnIndex row:row withEvent:nil select:YES];
+        return NO;
+    }
+    // Only allow editing the URL column
+    return [[tableColumn identifier] isEqualToString:@"URL"];
+}
+
 - (void)controlTextDidEndEditing:(NSNotification *)notification {
     if ([notification object] == urlTableView) {
         // Get the text from the notification's userInfo
