@@ -336,6 +336,7 @@
                         [self updateInfrastructure];
                     }
                 } else {
+                    // Keep "..." or set the actual title
                     [subscription setObject:title forKey:@"title"];
                     [self savePreferences];
                     [urlTableView reloadData];
@@ -467,10 +468,24 @@
         }
         
         if (error || !data) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                // Use the same error marker for network/data errors
-                completion(@"__HTTP_ERROR__");
-            });
+            // Check if this is a network connectivity issue
+            if (error && ([error.domain isEqualToString:NSURLErrorDomain] && 
+                         (error.code == NSURLErrorNotConnectedToInternet ||
+                          error.code == NSURLErrorNetworkConnectionLost ||
+                          error.code == NSURLErrorDNSLookupFailed ||
+                          error.code == NSURLErrorCannotFindHost ||
+                          error.code == NSURLErrorCannotConnectToHost ||
+                          error.code == NSURLErrorTimedOut))) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    // Keep the "..." for network connectivity issues
+                    completion(@"...");
+                });
+            } else {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    // Other errors are treated as invalid URL
+                    completion(@"__HTTP_ERROR__");
+                });
+            }
             return;
         }
         
