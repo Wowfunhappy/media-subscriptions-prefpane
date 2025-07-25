@@ -65,6 +65,17 @@
     [removeButton setEnabled:NO];
     [buttonContainer addSubview:removeButton];
     
+    // Add instructional text below the buttons
+    NSTextField *instructionLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(321, 22, 550, 17)];
+    [instructionLabel setStringValue:@"Add the URL of a Youtube channel or playlist, or an RSS feed."];
+    [instructionLabel setBezeled:NO];
+    [instructionLabel setDrawsBackground:NO];
+    [instructionLabel setEditable:NO];
+    [instructionLabel setSelectable:NO];
+    [instructionLabel setFont:[NSFont systemFontOfSize:11]];
+    [instructionLabel setTextColor:[NSColor grayColor]];
+    [mainView addSubview:instructionLabel];
+    
     [urlTableView reloadData];
     
     return mainView;
