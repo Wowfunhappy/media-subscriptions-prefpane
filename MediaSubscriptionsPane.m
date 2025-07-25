@@ -7,21 +7,21 @@
 @implementation MediaSubscriptionsPane
 
 - (NSView *)loadMainView {
-    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 440, 280)];
+    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 668, 280)];
     [self setMainView:mainView];
     
     urls = [[NSMutableArray alloc] init];
     [self loadPreferences];
     
-    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 45, 400, 215)];
+    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 40, 628, 220)];
     [scrollView setBorderType:NSBezelBorder];
     [scrollView setHasVerticalScroller:YES];
     [scrollView setAutohidesScrollers:YES];
     
-    urlTableView = [[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 398, 213)];
+    urlTableView = [[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 626, 218)];
     NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier:@"URL"];
     [[column headerCell] setStringValue:@"Subscription URLs"];
-    [column setWidth:396];
+    [column setWidth:624];
     [urlTableView addTableColumn:column];
     [urlTableView setUsesAlternatingRowBackgroundColors:YES];
     [urlTableView setDelegate:self];
@@ -31,7 +31,7 @@
     [mainView addSubview:scrollView];
     
     // Button container view at bottom left of scroll view
-    NSView *buttonContainer = [[NSView alloc] initWithFrame:NSMakeRect(20, 20, 50, 23)];
+    NSView *buttonContainer = [[NSView alloc] initWithFrame:NSMakeRect(20, 15, 50, 23)];
     [mainView addSubview:buttonContainer];
     
     // Add button with gradient style
