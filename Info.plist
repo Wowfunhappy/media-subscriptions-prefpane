@@ -23,6 +23,7 @@
 	<key>NSPrincipalClass</key>
 	<string>MediaSubscriptionsPane</string>
 	<key>NSPrefPaneIconLabel</key>
-	<string>Media Subscriptions</string>
+	<string>Media
+Subscriptions</string>
 </dict>
 </plist>

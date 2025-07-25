@@ -13,12 +13,12 @@
     urls = [[NSMutableArray alloc] init];
     [self loadPreferences];
     
-    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 60, 400, 200)];
+    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 45, 400, 215)];
     [scrollView setBorderType:NSBezelBorder];
     [scrollView setHasVerticalScroller:YES];
     [scrollView setAutohidesScrollers:YES];
     
-    urlTableView = [[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 398, 198)];
+    urlTableView = [[NSTableView alloc] initWithFrame:NSMakeRect(0, 0, 398, 213)];
     NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier:@"URL"];
     [[column headerCell] setStringValue:@"Subscription URLs"];
     [column setWidth:396];
@@ -30,20 +30,32 @@
     [scrollView setDocumentView:urlTableView];
     [mainView addSubview:scrollView];
     
-    addButton = [[NSButton alloc] initWithFrame:NSMakeRect(20, 20, 100, 30)];
-    [addButton setTitle:@"Add URL"];
-    [addButton setBezelStyle:NSRoundedBezelStyle];
+    // Button container view at bottom left of scroll view
+    NSView *buttonContainer = [[NSView alloc] initWithFrame:NSMakeRect(20, 20, 50, 23)];
+    [mainView addSubview:buttonContainer];
+    
+    // Add button with gradient style
+    addButton = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 25, 23)];
+    [addButton setBezelStyle:NSSmallSquareBezelStyle];
+    [addButton setButtonType:NSMomentaryPushInButton];
+    [addButton setImage:[NSImage imageNamed:NSImageNameAddTemplate]];
+    [addButton setImagePosition:NSImageOnly];
+    [addButton setBordered:YES];
     [addButton setTarget:self];
     [addButton setAction:@selector(addURL:)];
-    [mainView addSubview:addButton];
+    [buttonContainer addSubview:addButton];
     
-    removeButton = [[NSButton alloc] initWithFrame:NSMakeRect(130, 20, 100, 30)];
-    [removeButton setTitle:@"Remove URL"];
-    [removeButton setBezelStyle:NSRoundedBezelStyle];
+    // Minus button
+    removeButton = [[NSButton alloc] initWithFrame:NSMakeRect(24, 0, 25, 23)];
+    [removeButton setBezelStyle:NSSmallSquareBezelStyle];
+    [removeButton setButtonType:NSMomentaryPushInButton];
+    [removeButton setImage:[NSImage imageNamed:NSImageNameRemoveTemplate]];
+    [removeButton setImagePosition:NSImageOnly];
+    [removeButton setBordered:YES];
     [removeButton setTarget:self];
     [removeButton setAction:@selector(removeURL:)];
     [removeButton setEnabled:NO];
-    [mainView addSubview:removeButton];
+    [buttonContainer addSubview:removeButton];
     
     [urlTableView reloadData];
     
