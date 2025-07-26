@@ -18,6 +18,9 @@ BUNDLE_CONTENTS = $(BUNDLE)/Contents
 BUNDLE_MACOS = $(BUNDLE_CONTENTS)/MacOS
 BUNDLE_RESOURCES = $(BUNDLE_CONTENTS)/Resources
 
+# Version (automatically set to current date)
+VERSION = $(shell date +%Y.%m.%d)
+
 # Build rules
 all: bundle
 
@@ -32,7 +35,7 @@ $(BUNDLE_MACOS)/$(TARGET): $(OBJECTS)
 
 $(BUNDLE_CONTENTS)/Info.plist: Info.plist
 	@mkdir -p $(BUNDLE_CONTENTS)
-	cp Info.plist $(BUNDLE_CONTENTS)/
+	sed -e 's/<string>1.0<\/string>/<string>$(VERSION)<\/string>/g' Info.plist > $(BUNDLE_CONTENTS)/Info.plist
 
 resources:
 	@mkdir -p $(BUNDLE_RESOURCES)
@@ -42,6 +45,7 @@ resources:
 	chmod +x $(BUNDLE_RESOURCES)/ffmpeg
 	cp downloader.sh $(BUNDLE_RESOURCES)/
 	chmod +x $(BUNDLE_RESOURCES)/downloader.sh
+	cp icon.png $(BUNDLE_RESOURCES)/
 
 install-user: bundle
 	cp -R $(BUNDLE) ~/Library/PreferencePanes/

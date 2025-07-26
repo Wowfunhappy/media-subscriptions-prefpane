@@ -6,6 +6,8 @@
 	<string>English</string>
 	<key>CFBundleExecutable</key>
 	<string>MediaSubscriptions</string>
+	<key>CFBundleIconFile</key>
+	<string>icon.png</string>
 	<key>CFBundleIdentifier</key>
 	<string>Wowfunhappy.mediasubscriptions</string>
 	<key>CFBundleInfoDictionaryVersion</key>
