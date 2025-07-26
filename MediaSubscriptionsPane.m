@@ -111,11 +111,21 @@
     [self loadPreferences];
     [self loadTimePreference];
     [urlTableView reloadData];
+    
+    // Store the initial URLs as a set
+    NSMutableSet *urls = [NSMutableSet set];
+    for (NSDictionary *sub in subscriptions) {
+        NSString *url = [sub objectForKey:@"url"];
+        if (url && [url length] > 0) {
+            [urls addObject:url];
+        }
+    }
+    initialURLs = urls;
 }
 
 - (void)willUnselect {
-    // Start the launchd job immediately when exiting the preference pane
-    if ([subscriptions count] > 0) {
+    // Only start the launchd job if URLs have been added or removed
+    if ([self subscriptionsHaveChanged] && [subscriptions count] > 0) {
         NSTask *task = [[NSTask alloc] init];
         [task setLaunchPath:@"/bin/launchctl"];
         [task setArguments:@[@"start", LAUNCHAGENT_LABEL]];
@@ -128,6 +138,25 @@
             NSLog(@"Failed to start launchd job: %@", exception);
         }
     }
+}
+
+- (BOOL)subscriptionsHaveChanged {
+    // Check if initial state was captured
+    if (!initialURLs) {
+        return YES; // Assume changed if we don't have initial state
+    }
+    
+    // Extract URLs from current subscriptions
+    NSMutableSet *currentURLs = [NSMutableSet set];
+    for (NSDictionary *sub in subscriptions) {
+        NSString *url = [sub objectForKey:@"url"];
+        if (url && [url length] > 0) {
+            [currentURLs addObject:url];
+        }
+    }
+    
+    // Compare the sets
+    return ![currentURLs isEqualToSet:initialURLs];
 }
 
 - (void)addURL:(id)sender {
