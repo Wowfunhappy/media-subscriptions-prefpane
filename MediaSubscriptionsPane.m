@@ -375,51 +375,25 @@
         NSString *oldURL = [subscription objectForKey:@"url"];
         NSString *newURL = (NSString *)object;
         
-        // Check if URL is valid and not a duplicate
-        BOOL isValid = [self isValidURL:newURL];
-        BOOL isDuplicate = [self isDuplicateURL:newURL excludingIndex:row];
-        
-        if (!isValid || isDuplicate) {
-            // If the old URL was valid, restore it
-            if ([self isValidURL:oldURL] && ![self isDuplicateURL:oldURL excludingIndex:row]) {
-                // Keep the old URL, just refresh the table
-                [urlTableView reloadData];
-                return;
-            } else {
-                // Otherwise, remove the row (same as empty URL)
-                [subscriptions removeObjectAtIndex:row];
-                [self savePreferences];
-                [urlTableView reloadData];
-                [self updateInfrastructure];
-                return;
-            }
-        }
-        
-        [subscription setObject:newURL forKey:@"url"];
-        
-        if (![newURL isEqualToString:oldURL]) {
-            [subscription setObject:@"..." forKey:@"title"];
-            [self savePreferences];
-            [urlTableView reloadData];
-            
-            [self fetchTitleForURL:newURL completion:^(NSString *title) {
-                if ([title isEqualToString:@"__HTTP_ERROR__"]) {
-                    // Find the row index for this subscription
-                    NSInteger rowIndex = [subscriptions indexOfObject:subscription];
-                    if (rowIndex != NSNotFound) {
-                        [subscriptions removeObjectAtIndex:rowIndex];
-                        [self savePreferences];
-                        [urlTableView reloadData];
-                        [self updateInfrastructure];
-                    }
+        // Check if this is an Apple Podcast URL and convert it
+        if ([self isApplePodcastURL:newURL]) {
+            [self convertApplePodcastToRSS:newURL completion:^(NSString *rssURL) {
+                if (rssURL) {
+                    // Use the RSS URL instead
+                    [self processURLUpdate:subscription oldURL:oldURL newURL:rssURL row:row];
                 } else {
-                    // Keep "..." or set the actual title
-                    [subscription setObject:title forKey:@"title"];
+                    // Conversion failed, treat as invalid URL
+                    [subscriptions removeObjectAtIndex:row];
                     [self savePreferences];
                     [urlTableView reloadData];
+                    [self updateInfrastructure];
                 }
             }];
+            return;
         }
+        
+        // Process normal URLs
+        [self processURLUpdate:subscription oldURL:oldURL newURL:newURL row:row];
     }
 }
 
@@ -653,6 +627,126 @@
         NSCalendar *calendar = [NSCalendar currentCalendar];
         NSDate *defaultTime = [calendar dateFromComponents:components];
         [timePicker setDateValue:defaultTime];
+    }
+}
+
+- (BOOL)isApplePodcastURL:(NSString *)urlString {
+    if (!urlString || [urlString length] == 0) {
+        return NO;
+    }
+    
+    // Check if it's an Apple Podcast URL
+    return [urlString rangeOfString:@"podcasts.apple.com"].location != NSNotFound &&
+           [urlString rangeOfString:@"/id"].location != NSNotFound;
+}
+
+- (void)convertApplePodcastToRSS:(NSString *)appleURL completion:(void (^)(NSString *rssURL))completion {
+    // Extract iTunes ID from the URL
+    NSRange idRange = [appleURL rangeOfString:@"/id"];
+    if (idRange.location == NSNotFound) {
+        completion(nil);
+        return;
+    }
+    
+    NSString *idPart = [appleURL substringFromIndex:idRange.location + 3]; // Skip "/id"
+    NSInteger itunesID = 0;
+    NSScanner *scanner = [NSScanner scannerWithString:idPart];
+    [scanner scanInteger:&itunesID];
+    
+    if (itunesID == 0) {
+        completion(nil);
+        return;
+    }
+    
+    // Call iTunes Lookup API
+    NSString *lookupURLString = [NSString stringWithFormat:@"https://itunes.apple.com/lookup?id=%ld", (long)itunesID];
+    NSURL *lookupURL = [NSURL URLWithString:lookupURLString];
+    
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    config.timeoutIntervalForRequest = 10.0;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    
+    NSURLSessionDataTask *task = [session dataTaskWithURL:lookupURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || !data) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil);
+            });
+            return;
+        }
+        
+        NSError *jsonError;
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+        
+        if (jsonError || !json) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil);
+            });
+            return;
+        }
+        
+        NSArray *results = [json objectForKey:@"results"];
+        if ([results count] > 0) {
+            NSDictionary *podcast = [results objectAtIndex:0];
+            NSString *feedUrl = [podcast objectForKey:@"feedUrl"];
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(feedUrl);
+            });
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil);
+            });
+        }
+    }];
+    
+    [task resume];
+}
+
+- (void)processURLUpdate:(NSMutableDictionary *)subscription oldURL:(NSString *)oldURL newURL:(NSString *)newURL row:(NSInteger)row {
+    // Check if URL is valid and not a duplicate
+    BOOL isValid = [self isValidURL:newURL];
+    BOOL isDuplicate = [self isDuplicateURL:newURL excludingIndex:row];
+    
+    if (!isValid || isDuplicate) {
+        // If the old URL was valid, restore it
+        if ([self isValidURL:oldURL] && ![self isDuplicateURL:oldURL excludingIndex:row]) {
+            // Keep the old URL, just refresh the table
+            [urlTableView reloadData];
+            return;
+        } else {
+            // Otherwise, remove the row (same as empty URL)
+            [subscriptions removeObjectAtIndex:row];
+            [self savePreferences];
+            [urlTableView reloadData];
+            [self updateInfrastructure];
+            return;
+        }
+    }
+    
+    [subscription setObject:newURL forKey:@"url"];
+    
+    if (![newURL isEqualToString:oldURL]) {
+        [subscription setObject:@"..." forKey:@"title"];
+        [self savePreferences];
+        [urlTableView reloadData];
+        
+        [self fetchTitleForURL:newURL completion:^(NSString *title) {
+            if ([title isEqualToString:@"__HTTP_ERROR__"]) {
+                // Find the row index for this subscription
+                NSInteger rowIndex = [subscriptions indexOfObject:subscription];
+                if (rowIndex != NSNotFound) {
+                    [subscriptions removeObjectAtIndex:rowIndex];
+                    [self savePreferences];
+                    [urlTableView reloadData];
+                    [self updateInfrastructure];
+                }
+            } else {
+                // Keep "..." or set the actual title
+                [subscription setObject:title forKey:@"title"];
+                [self savePreferences];
+                [urlTableView reloadData];
+            }
+        }];
     }
 }
 
