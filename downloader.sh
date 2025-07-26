@@ -31,7 +31,7 @@ echo "$URLS" | while IFS= read -r url; do
     # Download everything to cache directory first
     "$YT_DLP" \
         -f "bestvideo+bestaudio/best" \
-        --format-sort "res,fps,vcodec:h264,vcodec:vp9.2,vcodec:vp9,vcodec:h265,vcodec:h263,vcodec:vp8,vcodec:theora,vcodec:av1,acodec:aac,acodec:mp4a,acodec:ac3,acodec:opus" \
+        --format-sort "-hdr,res,fps,vcodec:h264,vcodec:vp9.2,vcodec:vp9,vcodec:h265,vcodec:h263,vcodec:vp8,vcodec:theora,vcodec:av1,acodec:aac,acodec:mp4a,acodec:ac3,acodec:opus" \
         --dateafter today-1month \
         --playlist-end 15 \
         --download-archive "$ARCHIVE_FILE" \
@@ -45,6 +45,7 @@ echo "$URLS" | while IFS= read -r url; do
         --embed-subs \
         --match-filter "duration>150" \
         --xattrs \
+        --mtime \
         --merge-output-format mp4 \
         --compat-options no-live-chat \
         --paths "$CACHE_DIR" \
