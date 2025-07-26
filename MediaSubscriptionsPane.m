@@ -599,6 +599,12 @@
                 title = [title stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
                 title = [title stringByReplacingOccurrencesOfString:@"&#39;" withString:@"'"];
                 
+                // Strip CDATA sections
+                if ([title hasPrefix:@"<![CDATA["] && [title hasSuffix:@"]]>"]) {
+                    title = [title substringWithRange:NSMakeRange(9, [title length] - 12)];
+                    title = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                }
+                
                 if ([title hasSuffix:@" - YouTube"]) {
                     title = [title substringToIndex:[title length] - 10];
                 }
