@@ -36,6 +36,11 @@ echo "$URLS" | while IFS= read -r url; do
         --playlist-end 15 \
         --download-archive "$ARCHIVE_FILE" \
         --ignore-errors \
+        --retry-sleep 30 \
+        --sleep-subtitles 8 \
+        --sleep-requests 1.5 \
+        --sleep-interval 15 \
+        --max-sleep-interval 40 \
         --no-check-certificate \
         --ffmpeg-location "$FFMPEG" \
         --replace-in-metadata title \' ’ \
