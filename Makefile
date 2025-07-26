@@ -4,8 +4,8 @@
 CC = clang
 OBJC = clang
 FRAMEWORKS = -framework Cocoa -framework PreferencePanes
-CFLAGS = -mmacosx-version-min=10.9 -fobjc-arc
-LDFLAGS = $(FRAMEWORKS)
+CFLAGS = -mmacosx-version-min=10.9 -fobjc-arc -O2 -DNDEBUG
+LDFLAGS = $(FRAMEWORKS) -Wl,-dead_strip
 
 # Target and source files
 TARGET = MediaSubscriptions
