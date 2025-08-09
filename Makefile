@@ -4,7 +4,7 @@
 CC = clang
 OBJC = clang
 FRAMEWORKS = -framework Cocoa -framework PreferencePanes
-CFLAGS = -mmacosx-version-min=10.9 -fobjc-arc
+CFLAGS = -mmacosx-version-min=10.9 -fobjc-arc -O2
 LDFLAGS = $(FRAMEWORKS)
 
 # Target and source files
