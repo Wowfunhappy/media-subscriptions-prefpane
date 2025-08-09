@@ -375,6 +375,37 @@
         NSString *oldURL = [subscription objectForKey:@"url"];
         NSString *newURL = (NSString *)object;
         
+        // Add http:// if no scheme is specified
+        if ([newURL length] > 0 && ![newURL hasPrefix:@"http://"] && ![newURL hasPrefix:@"https://"]) {
+            newURL = [@"http://" stringByAppendingString:newURL];
+        }
+        
+        // Process YouTube channel URLs to append /videos if not already specified
+        NSURL *url = [NSURL URLWithString:newURL];
+        if (url) {
+            NSString *host = [url.host lowercaseString];
+            if ([host isEqualToString:@"youtube.com"] || [host isEqualToString:@"www.youtube.com"] || 
+                [host isEqualToString:@"m.youtube.com"]) {
+                NSString *path = url.path;
+                // Check if it's a channel URL without a specific tab
+                if ([path hasPrefix:@"/@"] || [path hasPrefix:@"/c/"] || [path hasPrefix:@"/channel/"] || [path hasPrefix:@"/user/"]) {
+                    // Check if it doesn't already have a tab specified
+                    if (![path hasSuffix:@"/videos"] && ![path hasSuffix:@"/shorts"] && 
+                        ![path hasSuffix:@"/streams"] && ![path hasSuffix:@"/playlists"] &&
+                        ![path hasSuffix:@"/community"] && ![path hasSuffix:@"/channels"] &&
+                        ![path hasSuffix:@"/about"]) {
+                        // Append /videos to get only the regular videos tab
+                        NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+                        components.path = [path stringByAppendingString:@"/videos"];
+                        NSURL *modifiedURL = components.URL;
+                        if (modifiedURL) {
+                            newURL = [modifiedURL absoluteString];
+                        }
+                    }
+                }
+            }
+        }
+        
         // Check if URL is valid and not a duplicate
         BOOL isValid = [self isValidURL:newURL];
         BOOL isDuplicate = [self isDuplicateURL:newURL excludingIndex:row];
@@ -488,6 +519,7 @@
         }
     }
 }
+
 
 - (BOOL)isValidURL:(NSString *)urlString {
     if ([urlString length] == 0) {

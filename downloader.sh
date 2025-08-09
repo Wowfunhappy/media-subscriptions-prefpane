@@ -52,7 +52,7 @@ echo "$URLS" | while IFS= read -r url; do
         --embed-thumbnail \
         --all-subs \
         --embed-subs \
-        --match-filter "duration>150" \
+        --match-filter "duration>60" \
         --xattrs \
         --mtime \
         --merge-output-format mp4 \
