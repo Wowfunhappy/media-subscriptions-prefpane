@@ -657,6 +657,11 @@
 				title = [html substringWithRange:titleRange];
 				title = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 				
+				// Strip CDATA tags if present
+				if ([title hasPrefix:@"<![CDATA["] && [title hasSuffix:@"]]>"]) {
+					title = [title substringWithRange:NSMakeRange(9, [title length] - 12)];
+				}
+				
 				title = [title stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
 				title = [title stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
 				title = [title stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
