@@ -390,12 +390,42 @@
 				[host isEqualToString:@"m.youtube.com"]) {
 				NSString *path = url.path;
 				// Check if it's a channel URL without a specific tab
-				if ([path hasPrefix:@"/@"] || [path hasPrefix:@"/c/"] || [path hasPrefix:@"/channel/"] || [path hasPrefix:@"/user/"]) {
+				// This includes /@username, /c/channelname, /channel/ID, /user/username, and /customname formats
+				BOOL isChannelURL = (
+					[path hasPrefix:@"/@"] ||
+					[path hasPrefix:@"/c/"] || 
+					[path hasPrefix:@"/channel/"] ||
+					[path hasPrefix:@"/user/"]
+				);
+				
+				// Also check for direct username format (e.g., /theverge)
+				if (!isChannelURL && [path length] > 1) {
+					// Check if path is just /something without these tab suffixes
+					// and doesn't start with /watch, /playlist, /results, etc.
+					if (
+						![path hasPrefix:@"/watch"] && ![path hasPrefix:@"/playlist"] && 
+						![path hasPrefix:@"/results"] && ![path hasPrefix:@"/feed"] &&
+						[path rangeOfString:@"/videos"].location == NSNotFound && 
+						[path rangeOfString:@"/shorts"].location == NSNotFound && 
+						[path rangeOfString:@"/streams"].location == NSNotFound && 
+						[path rangeOfString:@"/playlists"].location == NSNotFound &&
+						[path rangeOfString:@"/community"].location == NSNotFound && 
+						[path rangeOfString:@"/channels"].location == NSNotFound &&
+						[path rangeOfString:@"/about"].location == NSNotFound
+					) {
+						// This is likely a direct username format
+						isChannelURL = YES;
+					}
+				}
+				
+				if (isChannelURL) {
 					// Check if it doesn't already have a tab specified
-					if (![path hasSuffix:@"/videos"] && ![path hasSuffix:@"/shorts"] && 
+					if (
+						![path hasSuffix:@"/videos"] && ![path hasSuffix:@"/shorts"] && 
 						![path hasSuffix:@"/streams"] && ![path hasSuffix:@"/playlists"] &&
 						![path hasSuffix:@"/community"] && ![path hasSuffix:@"/channels"] &&
-						![path hasSuffix:@"/about"]) {
+						![path hasSuffix:@"/about"]
+					) {
 						// Append /videos to get only the regular videos tab
 						NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
 						components.path = [path stringByAppendingString:@"/videos"];
