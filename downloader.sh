@@ -1,7 +1,7 @@
 #!/bin/sh
 
 RESOURCES_DIR="$1"
-YT_DLP="$RESOURCES_DIR/yt-dlp"
+BUNDLED_YT_DLP="$RESOURCES_DIR/yt-dlp"
 FFMPEG="$RESOURCES_DIR/ffmpeg"
 
 APP_SUPPORT="$HOME/Library/Application Support/MediaSubscriptions"
@@ -10,6 +10,15 @@ CACHE_DIR="$HOME/Library/Caches/MediaSubscriptions"
 MOVIES_DIR="$HOME/Movies"
 MUSIC_DIR="$HOME/Music"
 
+# Ensure Application Support directory exists
+mkdir -p "$APP_SUPPORT"
+
+# Copy yt-dlp to Application Support and use that version
+YT_DLP="$APP_SUPPORT/yt-dlp"
+cp "$BUNDLED_YT_DLP" "$YT_DLP"
+chmod +x "$YT_DLP"
+
+# Update yt-dlp
 "$YT_DLP" -U
 
 URLS=$(defaults read Wowfunhappy.mediasubscriptions URLs 2>/dev/null | grep "url =" | sed 's/.*url = "\(.*\)";/\1/')
