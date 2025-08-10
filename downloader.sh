@@ -67,6 +67,11 @@ if [ -d "$CACHE_DIR" ]; then
 	# Move audio files to Music
 	find "$CACHE_DIR" -type f \( -name "*.mp3" -o -name "*.m4a" -o -name "*.aac" -o -name "*.opus" -o -name "*.ogg" -o -name "*.wav" -o -name "*.flac" \) -exec mv {} "$MUSIC_DIR/" \;
 	
-	# Move video files to Movies
-	find "$CACHE_DIR" -type f \( -name "*.mp4" -o -name "*.mkv" -o -name "*.webm" -o -name "*.avi" -o -name "*.mov" \) -exec mv {} "$MOVIES_DIR/" \;
+	# Move video files to Movies (excluding temporary and fragment files)
+	find "$CACHE_DIR" -type f \( -name "*.mp4" -o -name "*.mkv" -o -name "*.webm" -o -name "*.avi" -o -name "*.mov" \) \
+		! -name "*.temp.*" \
+		! -name "*.f[0-9]*.*" \
+		! -name "*.part" \
+		! -name "*.ytdl" \
+		-exec mv {} "$MOVIES_DIR/" \;
 fi
