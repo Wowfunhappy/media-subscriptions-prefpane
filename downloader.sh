@@ -52,12 +52,12 @@ echo "$URLS" | while IFS= read -r url; do
 		--max-sleep-interval 40 \
 		--no-check-certificate \
 		--ffmpeg-location "$FFMPEG" \
-		--replace-in-metadata title \' ' \
+		--replace-in-metadata title \' ’ \
 		--embed-metadata \
 		--embed-thumbnail \
 		--all-subs \
 		--embed-subs \
-		--match-filter "duration>150" \
+		--match-filter "duration>90" \
 		--xattrs \
 		--mtime \
 		--merge-output-format mp4 \
