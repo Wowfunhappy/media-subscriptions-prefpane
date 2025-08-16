@@ -7,6 +7,7 @@
     NSButton *removeButton;
     NSMutableDictionary *titleCache;
     NSDatePicker *timePicker;
+    NSSet *initialURLs;
 }
 
 - (void)addURL:(id)sender;
@@ -21,5 +22,6 @@
 - (NSString *)logsPath;
 - (NSString *)cachesPath;
 - (void)fetchTitleForURL:(NSString *)urlString completion:(void (^)(NSString *title))completion;
+- (BOOL)subscriptionsHaveChanged;
 
 @end

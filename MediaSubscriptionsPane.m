@@ -113,11 +113,21 @@
 	[self loadPreferences];
 	[self loadTimePreference];
 	[urlTableView reloadData];
+	
+	// Store the initial URLs as a set
+	NSMutableSet *urls = [NSMutableSet set];
+	for (NSDictionary *sub in subscriptions) {
+		NSString *url = [sub objectForKey:@"url"];
+		if (url && [url length] > 0) {
+			[urls addObject:url];
+		}
+	}
+	initialURLs = urls;
 }
 
 - (void)willUnselect {
-	// Start the launchd job immediately when exiting the preference pane
-	if ([subscriptions count] > 0) {
+	// Only start the launchd job if URLs have been added or removed
+	if ([self subscriptionsHaveChanged] && [subscriptions count] > 0) {
 		NSTask *task = [[NSTask alloc] init];
 		[task setLaunchPath:@"/bin/launchctl"];
 		[task setArguments:@[@"start", LAUNCHAGENT_LABEL]];
@@ -130,6 +140,25 @@
 			NSLog(@"Failed to start launchd job: %@", exception);
 		}
 	}
+}
+
+- (BOOL)subscriptionsHaveChanged {
+    // Check if initial state was captured
+    if (!initialURLs) {
+        return YES; // Assume changed if we don't have initial state
+    }
+    
+    // Extract URLs from current subscriptions
+    NSMutableSet *currentURLs = [NSMutableSet set];
+    for (NSDictionary *sub in subscriptions) {
+        NSString *url = [sub objectForKey:@"url"];
+        if (url && [url length] > 0) {
+            [currentURLs addObject:url];
+        }
+    }
+    
+    // Compare the sets
+    return ![currentURLs isEqualToSet:initialURLs];
 }
 
 - (void)addURL:(id)sender {
@@ -382,6 +411,23 @@
 			newURL = [@"http://" stringByAppendingString:newURL];
 		}
 		
+		// Check if this is an Apple Podcast URL and convert it
+		if ([self isApplePodcastURL:newURL]) {
+			[self convertApplePodcastToRSS:newURL completion:^(NSString *rssURL) {
+				if (rssURL) {
+					// Use the RSS URL instead
+					[self processURLUpdate:subscription oldURL:oldURL newURL:rssURL row:row];
+				} else {
+					// Conversion failed, treat as invalid URL
+					[subscriptions removeObjectAtIndex:row];
+					[self savePreferences];
+					[urlTableView reloadData];
+					[self updateInfrastructure];
+				}
+			}];
+			return;
+		}
+		
 		// Process YouTube channel URLs to append /videos if not already specified
 		NSURL *url = [NSURL URLWithString:newURL];
 		if (url) {
@@ -438,51 +484,8 @@
 			}
 		}
 		
-		// Check if URL is valid and not a duplicate
-		BOOL isValid = [self isValidURL:newURL];
-		BOOL isDuplicate = [self isDuplicateURL:newURL excludingIndex:row];
-		
-		if (!isValid || isDuplicate) {
-			// If the old URL was valid, restore it
-			if ([self isValidURL:oldURL] && ![self isDuplicateURL:oldURL excludingIndex:row]) {
-				// Keep the old URL, just refresh the table
-				[urlTableView reloadData];
-				return;
-			} else {
-				// Otherwise, remove the row (same as empty URL)
-				[subscriptions removeObjectAtIndex:row];
-				[self savePreferences];
-				[urlTableView reloadData];
-				[self updateInfrastructure];
-				return;
-			}
-		}
-		
-		[subscription setObject:newURL forKey:@"url"];
-		
-		if (![newURL isEqualToString:oldURL]) {
-			[subscription setObject:@"..." forKey:@"title"];
-			[self savePreferences];
-			[urlTableView reloadData];
-			
-			[self fetchTitleForURL:newURL completion:^(NSString *title) {
-				if ([title isEqualToString:@"__HTTP_ERROR__"]) {
-					// Find the row index for this subscription
-					NSInteger rowIndex = [subscriptions indexOfObject:subscription];
-					if (rowIndex != NSNotFound) {
-						[subscriptions removeObjectAtIndex:rowIndex];
-						[self savePreferences];
-						[urlTableView reloadData];
-						[self updateInfrastructure];
-					}
-				} else {
-					// Keep "..." or set the actual title
-					[subscription setObject:title forKey:@"title"];
-					[self savePreferences];
-					[urlTableView reloadData];
-				}
-			}];
-		}
+		// Process normal URLs
+		[self processURLUpdate:subscription oldURL:oldURL newURL:newURL row:row];
 	}
 }
 
@@ -657,16 +660,17 @@
 				title = [html substringWithRange:titleRange];
 				title = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 				
-				// Strip CDATA tags if present
-				if ([title hasPrefix:@"<![CDATA["] && [title hasSuffix:@"]]>"]) {
-					title = [title substringWithRange:NSMakeRange(9, [title length] - 12)];
-				}
-				
 				title = [title stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
 				title = [title stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
 				title = [title stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
 				title = [title stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
 				title = [title stringByReplacingOccurrencesOfString:@"&#39;" withString:@"'"];
+				
+				// Strip CDATA sections
+				if ([title hasPrefix:@"<![CDATA["] && [title hasSuffix:@"]]>"]) {
+					title = [title substringWithRange:NSMakeRange(9, [title length] - 12)];
+					title = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+				}
 				
 				if ([title hasSuffix:@" - YouTube"]) {
 					title = [title substringToIndex:[title length] - 10];
@@ -717,6 +721,126 @@
 		NSDate *defaultTime = [calendar dateFromComponents:components];
 		[timePicker setDateValue:defaultTime];
 	}
+}
+
+- (BOOL)isApplePodcastURL:(NSString *)urlString {
+    if (!urlString || [urlString length] == 0) {
+        return NO;
+    }
+    
+    // Check if it's an Apple Podcast URL
+    return [urlString rangeOfString:@"podcasts.apple.com"].location != NSNotFound &&
+           [urlString rangeOfString:@"/id"].location != NSNotFound;
+}
+
+- (void)convertApplePodcastToRSS:(NSString *)appleURL completion:(void (^)(NSString *rssURL))completion {
+    // Extract iTunes ID from the URL
+    NSRange idRange = [appleURL rangeOfString:@"/id"];
+    if (idRange.location == NSNotFound) {
+        completion(nil);
+        return;
+    }
+    
+    NSString *idPart = [appleURL substringFromIndex:idRange.location + 3]; // Skip "/id"
+    NSInteger itunesID = 0;
+    NSScanner *scanner = [NSScanner scannerWithString:idPart];
+    [scanner scanInteger:&itunesID];
+    
+    if (itunesID == 0) {
+        completion(nil);
+        return;
+    }
+    
+    // Call iTunes Lookup API
+    NSString *lookupURLString = [NSString stringWithFormat:@"https://itunes.apple.com/lookup?id=%ld", (long)itunesID];
+    NSURL *lookupURL = [NSURL URLWithString:lookupURLString];
+    
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    config.timeoutIntervalForRequest = 10.0;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    
+    NSURLSessionDataTask *task = [session dataTaskWithURL:lookupURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || !data) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil);
+            });
+            return;
+        }
+        
+        NSError *jsonError;
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+        
+        if (jsonError || !json) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil);
+            });
+            return;
+        }
+        
+        NSArray *results = [json objectForKey:@"results"];
+        if ([results count] > 0) {
+            NSDictionary *podcast = [results objectAtIndex:0];
+            NSString *feedUrl = [podcast objectForKey:@"feedUrl"];
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(feedUrl);
+            });
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil);
+            });
+        }
+    }];
+    
+    [task resume];
+}
+
+- (void)processURLUpdate:(NSMutableDictionary *)subscription oldURL:(NSString *)oldURL newURL:(NSString *)newURL row:(NSInteger)row {
+    // Check if URL is valid and not a duplicate
+    BOOL isValid = [self isValidURL:newURL];
+    BOOL isDuplicate = [self isDuplicateURL:newURL excludingIndex:row];
+    
+    if (!isValid || isDuplicate) {
+        // If the old URL was valid, restore it
+        if ([self isValidURL:oldURL] && ![self isDuplicateURL:oldURL excludingIndex:row]) {
+            // Keep the old URL, just refresh the table
+            [urlTableView reloadData];
+            return;
+        } else {
+            // Otherwise, remove the row (same as empty URL)
+            [subscriptions removeObjectAtIndex:row];
+            [self savePreferences];
+            [urlTableView reloadData];
+            [self updateInfrastructure];
+            return;
+        }
+    }
+    
+    [subscription setObject:newURL forKey:@"url"];
+    
+    if (![newURL isEqualToString:oldURL]) {
+        [subscription setObject:@"..." forKey:@"title"];
+        [self savePreferences];
+        [urlTableView reloadData];
+        
+        [self fetchTitleForURL:newURL completion:^(NSString *title) {
+            if ([title isEqualToString:@"__HTTP_ERROR__"]) {
+                // Find the row index for this subscription
+                NSInteger rowIndex = [subscriptions indexOfObject:subscription];
+                if (rowIndex != NSNotFound) {
+                    [subscriptions removeObjectAtIndex:rowIndex];
+                    [self savePreferences];
+                    [urlTableView reloadData];
+                    [self updateInfrastructure];
+                }
+            } else {
+                // Keep "..." or set the actual title
+                [subscription setObject:title forKey:@"title"];
+                [self savePreferences];
+                [urlTableView reloadData];
+            }
+        }];
+    }
 }
 
 @end
