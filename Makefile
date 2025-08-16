@@ -39,9 +39,9 @@ $(BUNDLE_CONTENTS)/Info.plist: Info.plist
 
 resources:
 	@mkdir -p $(BUNDLE_RESOURCES)
+	cp -r Deps/python3 $(BUNDLE_RESOURCES)/
 	cp Deps/yt-dlp $(BUNDLE_RESOURCES)/
 	cp Deps/ffmpeg $(BUNDLE_RESOURCES)/
-	chmod +x $(BUNDLE_RESOURCES)/yt-dlp
 	chmod +x $(BUNDLE_RESOURCES)/ffmpeg
 	cp downloader.sh $(BUNDLE_RESOURCES)/
 	chmod +x $(BUNDLE_RESOURCES)/downloader.sh

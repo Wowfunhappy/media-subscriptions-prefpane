@@ -1,6 +1,7 @@
 #!/bin/sh
 
 RESOURCES_DIR="$1"
+BUNDLED_PYTHON="$RESOURCES_DIR/python3/bin/python3.10"
 BUNDLED_YT_DLP="$RESOURCES_DIR/yt-dlp"
 FFMPEG="$RESOURCES_DIR/ffmpeg"
 
@@ -16,10 +17,9 @@ mkdir -p "$APP_SUPPORT"
 # Copy yt-dlp to Application Support and use that version
 YT_DLP="$APP_SUPPORT/yt-dlp"
 cp "$BUNDLED_YT_DLP" "$YT_DLP"
-chmod +x "$YT_DLP"
 
 # Update yt-dlp
-"$YT_DLP" -U
+"$BUNDLED_PYTHON" "$YT_DLP" -U --no-check-certificates
 
 URLS=$(defaults read Wowfunhappy.mediasubscriptions URLs 2>/dev/null | grep "url =" | sed 's/.*url = "\(.*\)";/\1/')
 
@@ -38,7 +38,7 @@ echo "$URLS" | while IFS= read -r url; do
 	ARCHIVE_FILE="$ARCHIVES_DIR/$(echo "$url" | sed 's/[^a-zA-Z0-9]/_/g').txt"
 	
 	# Download everything to cache directory first
-	"$YT_DLP" \
+	"$BUNDLED_PYTHON" "$YT_DLP" \
 		-f "bestvideo+bestaudio/best" \
 		--format-sort "+hdr,res,fps,vcodec:h264,vcodec:vp9.2,vcodec:vp9,vcodec:h265,vcodec:h263,vcodec:vp8,vcodec:theora,vcodec:av1,acodec:aac,acodec:mp4a,acodec:ac3,acodec:opus" \
 		--dateafter today-1month \
@@ -50,7 +50,7 @@ echo "$URLS" | while IFS= read -r url; do
 		--sleep-requests 1.5 \
 		--sleep-interval 15 \
 		--max-sleep-interval 40 \
-		--no-check-certificate \
+		--no-check-certificates \
 		--ffmpeg-location "$FFMPEG" \
 		--replace-in-metadata title \' ’ \
 		--embed-metadata \
