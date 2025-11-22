@@ -35,7 +35,9 @@ $(BUNDLE_MACOS)/$(TARGET): $(OBJECTS)
 
 $(BUNDLE_CONTENTS)/Info.plist: Info.plist
 	@mkdir -p $(BUNDLE_CONTENTS)
-	sed -e 's/<string>1.0<\/string>/<string>$(VERSION)<\/string>/g' Info.plist > $(BUNDLE_CONTENTS)/Info.plist
+	sed -e '/<key>CFBundleShortVersionString<\/key>/{n;s|<string>[^<]*</string>|<string>$(VERSION)</string>|;}' \
+	    -e '/<key>CFBundleVersion<\/key>/{n;s|<string>[^<]*</string>|<string>$(VERSION)</string>|;}' \
+	    Info.plist > $(BUNDLE_CONTENTS)/Info.plist
 
 resources:
 	@mkdir -p $(BUNDLE_RESOURCES)
