@@ -4,6 +4,11 @@ RESOURCES_DIR="$1"
 BUNDLED_PYTHON="$RESOURCES_DIR/python3/bin/python3.10"
 BUNDLED_YT_DLP="$RESOURCES_DIR/yt-dlp"
 FFMPEG="$RESOURCES_DIR/ffmpeg"
+DENO="$RESOURCES_DIR/deno"
+
+# Set up environment for Deno on OS X 10.9
+export DYLD_FORCE_FLAT_NAMESPACE=1
+export DYLD_INSERT_LIBRARIES="$RESOURCES_DIR/libWowfunhappyLegacySupport.dylib:$RESOURCES_DIR/libMacportsLegacySupport.dylib"
 
 APP_SUPPORT="$HOME/Library/Application Support/MediaSubscriptions"
 ARCHIVES_DIR="$APP_SUPPORT/archives"
@@ -52,6 +57,7 @@ echo "$URLS" | while IFS= read -r url; do
 		--max-sleep-interval 40 \
 		--no-check-certificates \
 		--ffmpeg-location "$FFMPEG" \
+		--js-runtimes "deno:$DENO" \
 		--replace-in-metadata title \' ’ \
 		--embed-metadata \
 		--embed-thumbnail \
