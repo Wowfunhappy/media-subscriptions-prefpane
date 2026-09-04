@@ -7,6 +7,7 @@
     NSButton *removeButton;
     NSMutableDictionary *titleCache;
     NSDatePicker *timePicker;
+    NSPopUpButton *qualityPopup;
     NSSet *initialURLs;
 }
 
@@ -14,6 +15,8 @@
 - (void)removeURL:(id)sender;
 - (void)savePreferences;
 - (void)loadPreferences;
+- (void)saveQualityPreference;
+- (void)loadQualityPreference;
 - (void)updateInfrastructure;
 - (void)setupInfrastructure;
 - (void)teardownInfrastructure;

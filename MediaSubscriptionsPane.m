@@ -5,6 +5,7 @@
 #define PREF_DOMAIN @"Wowfunhappy.mediasubscriptions"
 #define PREF_URLS_KEY @"URLs"
 #define PREF_TIME_KEY @"ScheduledTime"
+#define PREF_QUALITY_KEY @"MaximumVideoQuality"
 #define LAUNCHAGENT_LABEL @"Wowfunhappy.mediasubscriptions.downloader"
 
 @implementation MediaSubscriptionsPane
@@ -103,6 +104,24 @@
 	[self loadTimePreference];
 	
 	[mainView addSubview:timePicker];
+
+	// Add a maximum video quality selector on the right side of the bottom row
+	NSTextField *qualityLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(362, 22, 182, 17)];
+	[qualityLabel setStringValue:@"Maximum video quality:"];
+	[qualityLabel setBezeled:NO];
+	[qualityLabel setDrawsBackground:NO];
+	[qualityLabel setEditable:NO];
+	[qualityLabel setSelectable:NO];
+	[qualityLabel setFont:[NSFont systemFontOfSize:13]];
+	[qualityLabel setAlignment:NSRightTextAlignment];
+	[mainView addSubview:qualityLabel];
+
+	qualityPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(548, 17, 100, 26) pullsDown:NO];
+	[qualityPopup addItemsWithTitles:@[@"No limit", @"4K", @"1080p", @"720p"]];
+	[qualityPopup setTarget:self];
+	[qualityPopup setAction:@selector(qualityChanged:)];
+	[self loadQualityPreference];
+	[mainView addSubview:qualityPopup];
 	
 	[urlTableView reloadData];
 	
@@ -112,6 +131,7 @@
 - (void)willSelect {
 	[self loadPreferences];
 	[self loadTimePreference];
+	[self loadQualityPreference];
 	[urlTableView reloadData];
 	
 	// Store the initial URLs as a set
@@ -720,6 +740,41 @@
 		NSCalendar *calendar = [NSCalendar currentCalendar];
 		NSDate *defaultTime = [calendar dateFromComponents:components];
 		[timePicker setDateValue:defaultTime];
+	}
+}
+
+- (void)qualityChanged:(id)sender {
+	[self saveQualityPreference];
+}
+
+- (void)saveQualityPreference {
+	NSString *quality = [qualityPopup titleOfSelectedItem];
+	if (!quality) {
+		quality = @"No limit";
+	}
+
+	CFPreferencesSetValue((CFStringRef)PREF_QUALITY_KEY,
+							(__bridge CFPropertyListRef)quality,
+							(CFStringRef)PREF_DOMAIN,
+							kCFPreferencesCurrentUser,
+							kCFPreferencesAnyHost);
+	CFPreferencesSynchronize((CFStringRef)PREF_DOMAIN, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+}
+
+- (void)loadQualityPreference {
+	CFStringRef savedQuality = (CFStringRef)CFPreferencesCopyValue((CFStringRef)PREF_QUALITY_KEY,
+																(CFStringRef)PREF_DOMAIN,
+																kCFPreferencesCurrentUser,
+																kCFPreferencesAnyHost);
+	NSString *quality = savedQuality ? (__bridge NSString *)savedQuality : @"No limit";
+	NSArray *validQualities = @[@"No limit", @"4K", @"1080p", @"720p"];
+	if (![validQualities containsObject:quality]) {
+		quality = @"No limit";
+	}
+
+	[qualityPopup selectItemWithTitle:quality];
+	if (savedQuality) {
+		CFRelease(savedQuality);
 	}
 }
 

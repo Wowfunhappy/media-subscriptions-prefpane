@@ -1,14 +1,10 @@
 #!/bin/sh
 
 RESOURCES_DIR="$1"
-BUNDLED_PYTHON="$RESOURCES_DIR/python3/bin/python3.10"
+BUNDLED_PYTHON="$RESOURCES_DIR/python3/bin/python3"
 BUNDLED_YT_DLP="$RESOURCES_DIR/yt-dlp"
 FFMPEG="$RESOURCES_DIR/ffmpeg"
 DENO="$RESOURCES_DIR/deno"
-
-# Set up environment for Deno on OS X 10.9
-export DYLD_FORCE_FLAT_NAMESPACE=1
-export DYLD_INSERT_LIBRARIES="$RESOURCES_DIR/libWowfunhappyLegacySupport.dylib:$RESOURCES_DIR/libMacportsLegacySupport.dylib"
 
 APP_SUPPORT="$HOME/Library/Application Support/MediaSubscriptions"
 ARCHIVES_DIR="$APP_SUPPORT/archives"
@@ -27,6 +23,22 @@ cp "$BUNDLED_YT_DLP" "$YT_DLP"
 "$BUNDLED_PYTHON" "$YT_DLP" -U --no-check-certificates
 
 URLS=$(defaults read Wowfunhappy.mediasubscriptions URLs 2>/dev/null | grep "url =" | sed 's/.*url = "\(.*\)";/\1/')
+MAXIMUM_VIDEO_QUALITY=$(defaults read Wowfunhappy.mediasubscriptions MaximumVideoQuality 2>/dev/null)
+
+case "$MAXIMUM_VIDEO_QUALITY" in
+	"4K")
+		VIDEO_FORMAT="bestvideo[height<=2160]+bestaudio/best[height<=2160]/bestaudio"
+		;;
+	"1080p")
+		VIDEO_FORMAT="bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestaudio"
+		;;
+	"720p")
+		VIDEO_FORMAT="bestvideo[height<=720]+bestaudio/best[height<=720]/bestaudio"
+		;;
+	*)
+		VIDEO_FORMAT="bestvideo+bestaudio/best"
+		;;
+esac
 
 if [ -z "$URLS" ]; then
 	echo "No URLs configured"
@@ -44,7 +56,7 @@ echo "$URLS" | while IFS= read -r url; do
 	
 	# Download everything to cache directory first
 	"$BUNDLED_PYTHON" "$YT_DLP" \
-		-f "bestvideo+bestaudio/best" \
+		-f "$VIDEO_FORMAT" \
 		--format-sort "+hdr,res,fps,vcodec:h264,vcodec:vp9.2,vcodec:vp9,vcodec:h265,vcodec:h263,vcodec:vp8,vcodec:theora,vcodec:av1,acodec:aac,acodec:mp4a,acodec:ac3,acodec:opus" \
 		--dateafter today-1month \
 		--playlist-end 15 \
