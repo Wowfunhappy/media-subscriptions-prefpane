@@ -57,6 +57,7 @@ echo "$URLS" | while IFS= read -r url; do
 		--max-sleep-interval 40 \
 		--no-check-certificates \
 		--ffmpeg-location "$FFMPEG" \
+		--postprocessor-args "Merger+ffmpeg_o1:-bsf:v h264_metadata=level=auto" \
 		--js-runtimes "deno:$DENO" \
 		--replace-in-metadata title \' ’ \
 		--embed-metadata \
